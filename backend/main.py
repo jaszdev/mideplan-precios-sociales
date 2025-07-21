@@ -69,6 +69,8 @@ class MARGIN_TYPE(Enum):
     EXP = 'Exportable'
     DESX = 'Desv. Exportaciones'
 
+class ERRORS(Enum):
+    SID = 'Sin información disponible'
 
 # PARAMETROS
 METHOD = 1 # 1, 2 o 3
@@ -136,7 +138,7 @@ def M1_Compute_SP(ws, row):
 
 def getSpecificFactor(method, phase, code, currency, marginType):
     # METODO #1 - PREFACTIBILIDAD - Disponible en excel
-    if method == 1 and phase == 1 and code != None: 
+    if method == 1 and phase == 1 and code != None and code != ERRORS.SID.value: 
         code_row = codeToRowIndex(code)
 
         type_coord = f'{PRODUCTS_COLUMNS.TYPE.value}{code_row}'
@@ -172,7 +174,7 @@ def getSpecificFactor(method, phase, code, currency, marginType):
                 coord = f'{PRODUCTS_COLUMNS.CF_MT_DEXP.value}{code_row}'
                 return p_ws[coord].value   
     # METODO #1 - PREFACTIBILIDAD - No disponible en excel
-    elif method == 1 and phase == 1 and code == None:
+    elif method == 1 and phase == 1 and (code == None or code == ERRORS.SID.value):
         if (currency == CURRENCY.COLONES.value):
             return RAZON_PRECIO_SOCIAL_DIVISA
         else: # DOLARES
