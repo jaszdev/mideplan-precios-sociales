@@ -4,6 +4,8 @@ from enum import Enum
 PRODUCTS_PATH = '.\\files\\input_files\\products_updated.xlsx'
 
 RAZON_PRECIO_SOCIAL_DIVISA = 1.0645
+FACTOR_ESTANDAR_CONVERSION = 0.9394
+
 EXCHANGE_RATE = 504 # PENDIENTE: CALCULAR TIPO_DE_CAMBIO
 
 class PRODUCTS_COLUMNS(Enum):
@@ -73,11 +75,11 @@ class ERRORS(Enum):
     SID = 'Sin información disponible'
 
 # PARAMETROS
-METHOD = 1 # 1, 2 o 3
+METHOD = 2 # 1, 2 o 3
 PHASE = 1 # 1 para Prefactibilidad, 2 para Factibilidad
 
-INPUT_PATH = '.\\files\\inputs\\input1.xlsx'
-OUTPUT_PATH = '.\\files\\output\\result1.xlsx'
+INPUT_PATH = '.\\files\\inputs\\input2.xlsx'
+OUTPUT_PATH = '.\\files\\output\\result2.xlsx'
 
 # CARGAR HOJA DE BIENES T Y NT
 p_ws = load_workbook(filename=PRODUCTS_PATH, data_only=True).active
@@ -94,13 +96,13 @@ def main():
     price = ws[f'{RESULTS_COLUMNS.PRICE.value}{row}'].value
     while(price != None and price != ''):
 
-        M1_Compute_SP(ws, row)
+        Compute_SP(ws, row)
 
         row += 1
         price = ws[f'{RESULTS_COLUMNS.PRICE.value}{row}'].value
 
 
-def M1_Compute_SP(ws, row):
+def Compute_SP(ws, row):
     if PHASE == 1:
         code = ws[f'{RESULTS_COLUMNS.CODE.value}{row}'].value
         currency = ws[f'{RESULTS_COLUMNS.CURRENCY.value}{row}'].value
@@ -110,13 +112,14 @@ def M1_Compute_SP(ws, row):
 
         fe = getSpecificFactor(METHOD, PHASE, code, currency, marginType)
 
+        ps_coord = f'{RESULTS_COLUMNS.PS.value}{row}'
+        fe_coord = f'{RESULTS_COLUMNS.FE.value}{row}'
+        
         # WRITE FE
-        if (fe != TYPE.NT.value): # TRANSABLES
-            fe_coord = f'{RESULTS_COLUMNS.FE.value}{row}'
+        if fe != '=':
             ws[fe_coord] = fe
 
             # WRITE PS
-            ps_coord = f'{RESULTS_COLUMNS.PS.value}{row}'
             if fe != '-':
                 rowPrice_coord = f'{RESULTS_COLUMNS.PRICE.value}{row}'
                 ws[ps_coord] = f'={rowPrice_coord}*{fe_coord}'
@@ -124,12 +127,10 @@ def M1_Compute_SP(ws, row):
                 available_factors = getAvailableFactors(code)
                 available_factors_message = '' if len(available_factors) == 0 else f'Tipos de Margen válidos para este producto: {available_factors}.'
                 ws[ps_coord] = f'ERROR. Factor Específico no encontrado. {available_factors_message}'
-        elif fe == TYPE.NT.value: # NO TRANSABLES
-            fe_coord = f'{RESULTS_COLUMNS.FE.value}{row}'
+        elif fe == '=': # PRECIO = PRECIO SOCIAL
             ws[fe_coord] = '-'
 
             # WRITE PS
-            ps_coord = f'{RESULTS_COLUMNS.PS.value}{row}'
             rowPrice_coord = f'{RESULTS_COLUMNS.PRICE.value}{row}'
             ws[ps_coord] = f'={rowPrice_coord}'
 
@@ -137,15 +138,15 @@ def M1_Compute_SP(ws, row):
         pass
 
 def getSpecificFactor(method, phase, code, currency, marginType):
+
     # METODO #1 - PREFACTIBILIDAD - Disponible en excel
     if method == 1 and phase == 1 and code != None and code != ERRORS.SID.value: 
         code_row = codeToRowIndex(code)
-
         type_coord = f'{PRODUCTS_COLUMNS.TYPE.value}{code_row}'
-        p_type = p_ws[type_coord].value
+        p_type = p_ws[type_coord].value # T o NT
 
         if p_type == TYPE.NT.value:
-            return TYPE.NT.value
+            return '=' # PRECIO = PRECIO SOCIAL
 
         if (currency == CURRENCY.COLONES.value):
             if (marginType == MARGIN_TYPE.IMP.value):
@@ -180,6 +181,30 @@ def getSpecificFactor(method, phase, code, currency, marginType):
         else: # DOLARES
             return f'={RAZON_PRECIO_SOCIAL_DIVISA}*{EXCHANGE_RATE}'
 
+    # METODO #2 - PREFACTIBILIDAD
+    if method == 2 and phase == 1 and code != None and code != ERRORS.SID.value: 
+        code_row = codeToRowIndex(code)
+        type_coord = f'{PRODUCTS_COLUMNS.TYPE.value}{code_row}'
+        p_type = p_ws[type_coord].value # T o NT
+        
+        if p_type == TYPE.T.value:
+            if (currency == CURRENCY.COLONES.value):
+                return '=' # PRECIO = PRECIO SOCIAL
+            else: # DOLARES
+                return EXCHANGE_RATE
+        else: # No Transable - Disponible en excel
+            coord = f'{PRODUCTS_COLUMNS.VM_BNT.value}{code_row}'
+            fe = p_ws[coord].value
+            if (currency == CURRENCY.COLONES.value):
+                return fe
+            else: # DOLARES
+                return f'={fe}*{EXCHANGE_RATE}'
+    elif method == 2 and phase == 1 and (code == None or code == ERRORS.SID.value): # No transable - No disponible en excel
+        if (currency == CURRENCY.COLONES.value):
+            return FACTOR_ESTANDAR_CONVERSION
+        else: # DOLARES
+            return f'={FACTOR_ESTANDAR_CONVERSION}*{EXCHANGE_RATE}'
+
     return -1
 
 
@@ -205,6 +230,7 @@ def getAvailableFactors(code):
 
     return available_factors
 
+# Retorna el numero de fila para el codigo de entrada en hoja de PRODUCTS.
 def codeToRowIndex(code):
     int_code = int(code[2:5]) # PARSE (NP[CODE NUMBER] - PRODUCT NAME) -> CODE NUMBER
     return int_code + 1
