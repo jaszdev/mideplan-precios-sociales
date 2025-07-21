@@ -119,7 +119,9 @@ def M1_Compute_SP(ws, row):
                 rowPrice_coord = f'{RESULTS_COLUMNS.PRICE.value}{row}'
                 ws[ps_coord] = f'={rowPrice_coord}*{fe_coord}'
             elif fe == '-':
-                ws[ps_coord] = 'ERROR. Factor Específico no encontrado.'
+                available_factors = getAvailableFactors(code)
+                available_factors_message = '' if len(available_factors) == 0 else f'Tipos de Margen válidos para este producto: {available_factors}.'
+                ws[ps_coord] = f'ERROR. Factor Específico no encontrado. {available_factors_message}'
         elif fe == TYPE.NT.value: # NO TRANSABLES
             fe_coord = f'{RESULTS_COLUMNS.FE.value}{row}'
             ws[fe_coord] = '-'
@@ -135,8 +137,7 @@ def M1_Compute_SP(ws, row):
 def getSpecificFactor(method, phase, code, currency, marginType):
     # METODO #1 - PREFACTIBILIDAD - Disponible en excel
     if method == 1 and phase == 1 and code != None: 
-        int_code = int(code[2:5]) # PARSE (NP[CODE NUMBER] - PRODUCT NAME) -> CODE NUMBER
-        code_row = int_code + 1
+        code_row = codeToRowIndex(code)
 
         type_coord = f'{PRODUCTS_COLUMNS.TYPE.value}{code_row}'
         p_type = p_ws[type_coord].value
@@ -178,6 +179,33 @@ def getSpecificFactor(method, phase, code, currency, marginType):
             return f'={RAZON_PRECIO_SOCIAL_DIVISA}*{EXCHANGE_RATE}'
 
     return -1
+
+
+def getAvailableFactors(code):
+    available_factors = []
+    code_row = codeToRowIndex(code)
+
+    coord = f'{PRODUCTS_COLUMNS.CF_MNT_IMP.value}{code_row}'
+    if (p_ws[coord].value != '-'):
+        available_factors.append(MARGIN_TYPE.IMP.value)
+
+    coord = f'{PRODUCTS_COLUMNS.CF_MNT_SIMP.value}{code_row}'
+    if (p_ws[coord].value != '-'):
+        available_factors.append(MARGIN_TYPE.SIMP.value)
+    
+    coord = f'{PRODUCTS_COLUMNS.CF_MNT_EXP.value}{code_row}'
+    if (p_ws[coord].value != '-'):
+        available_factors.append(MARGIN_TYPE.EXP.value)
+    
+    coord = f'{PRODUCTS_COLUMNS.CF_MNT_DEXP.value}{code_row}'
+    if (p_ws[coord].value != '-'):
+        available_factors.append(MARGIN_TYPE.DESX.value)
+
+    return available_factors
+
+def codeToRowIndex(code):
+    int_code = int(code[2:5]) # PARSE (NP[CODE NUMBER] - PRODUCT NAME) -> CODE NUMBER
+    return int_code + 1
 
 main()
 
